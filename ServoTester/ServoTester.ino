@@ -58,7 +58,7 @@ int servoMin[6]={0,0,0,0,0,0};
 int servoMax[6]={180,180,180,180,180,180};
 int servoMidpoint[6]={90,90,90,90,90,90};
 bool servoInverted[6]={false,false,false,false,false,false};
-int offset[6] = {0,0,0,0,0,0};
+int servoOffset[6] = {0,0,0,0,0,0};
 int bind[6]={1,3,0,2,4,0};
 
 //Display
@@ -66,7 +66,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 //UI
 int selector=0;
-int menue=0; //0->Not loaded/Error 1->Main 2->Output 3->Output Set 4->Group 5->Group Set
+int menue=0; //0->Not loaded/Error 1->Main 2->Output Set 3->Group Set
 int selected=0;
 
 //timing
@@ -120,7 +120,7 @@ void setup() {
 
   //Servos
   for(int i=0;i<6;i++){
-    servos[i].attach(servoPins[i]);
+    servos[i].attach(servoPins[i]);servos[i].write(90);
   }
 
   
@@ -131,6 +131,7 @@ void setup() {
 
   //timing
   lastTime=millis();
+  Serial.println("initialized");
 }
 
 
@@ -190,9 +191,11 @@ void loop() {
           if(!toggleState1){
             counts[0]--;
             drawVal(0);
+            updateServoGroup(0);
           }else{
             counts[2]--;
             drawVal(2);
+            updateServoGroup(0);
           }
         }
         
@@ -203,9 +206,13 @@ void loop() {
           if(!toggleState1){
             counts[0]++;
             drawVal(0);
+            updateServoGroup(0);
+            
           }else{
             counts[2]++;
             drawVal(2);
+            updateServoGroup(2);
+            
           }
         }
         
@@ -231,10 +238,45 @@ void loop() {
           if(!toggleState2){
             counts[1]--;
             drawVal(1);
+            updateServoGroup(1);
           }else{
             counts[3]--;
             drawVal(3);
+            updateServoGroup(3);
           }          
+        }else if(menue==2){
+          switch(selector){
+            case 0:
+              if(servoMax[selected]>0){
+                servoMax[selected]--;
+              }else{servoMax[selected]=0;}
+            break;
+            case 1:
+             if(servoMin[selected]>1){
+                servoMin[selected]--;
+              }else{servoMin[selected]=1;}
+            break;
+            case 2:
+              if(servoOffset[selected]>1){
+                servoOffset[selected]--;
+              }else{servoOffset[selected]=1;}
+            break;
+            case 3:
+              if(servoMidpoint[selected]>1){
+                servoMidpoint[selected]--;
+              }else{servoMidpoint[selected]=1;}
+            break;
+            case 4:
+              servoInverted[selected]=!servoInverted[selected];
+            break;
+            case 5:
+              if(bind[selected]>0){
+                bind[selected]--;
+              }else{bind[selected]=0;}
+
+            break;
+          }
+          drawContent(selector);
         }
       }else{
         //Clockwise
@@ -243,10 +285,44 @@ void loop() {
           if(!toggleState2){
             counts[1]++;
             drawVal(1);
+            updateServoGroup(1);
           }else{
             counts[3]++;
             drawVal(3);
+            updateServoGroup(3);
           }
+        }else if(menue==2){
+          switch(selector){
+            case 0:
+              if(servoMax[selected]<180){
+                servoMax[selected]++;
+              }else{servoMax[selected]=180;}
+            break;
+            case 1:
+             if(servoMin[selected]<179){
+                servoMin[selected]++;
+              }else{servoMin[selected]=170;}
+            break;
+            case 2:
+              if(servoOffset[selected]<179){
+                servoOffset[selected]++;
+              }else{servoOffset[selected]=179;}
+            break;
+            case 3:
+              if(servoMidpoint[selected]<179){
+                servoMidpoint[selected]++;
+              }else{servoMidpoint[selected]=179;}
+            break;
+            case 4:
+              servoInverted[selected]=!servoInverted[selected];
+            break;
+            case 5:
+              if(bind[selected]<3){
+                bind[selected]++;
+              }else{bind[selected]=3;}
+            break;
+          }
+          drawContent(selector);
         }
       }
        pulseCount2=0;
@@ -263,25 +339,14 @@ void loop() {
       if(menue==1){
         //Switch to Groups
         if(selector==0){
-          selector=9;
+          selector=5;
           drawOutput(0);
-          drawGroup(3);
+          drawOutput(5);
         }else{
           selector--;
           //On Groups
-          if(selector>4){
-            if(selector==5){
-              drawOutput(5);
-              drawGroup(0);
-            }else{
-              drawGroup(selector-6);
-              drawGroup(selector-5);
-            }
-          }//Switch Output
-          else{
-            drawOutput(selector);
-            drawOutput(selector+1);
-          }
+          drawOutput(selector+1);
+          drawOutput(selector);
         }
       }else if(menue==2){
         if(selector==0){
@@ -303,28 +368,14 @@ void loop() {
     if(newMenueStates[1]==1){
       if(menue==1){
         //Switch to Outputs
-        if(selector==9){
+        if(selector==5){
           selector=0;
           drawOutput(0);
-          drawGroup(3);
+          drawOutput(5);
         }else{
           selector++;
-          //On Outputs
-          if(selector<7){
-            //Switch to Groups
-            if(selector==6){
-              drawOutput(5);
-              drawGroup(0);
-            }//Next Out
-            else{
-              drawOutput(selector-1);
-              drawOutput(selector);
-            }
-          //Switch Groups
-          }else{
-            drawGroup(selector-7);
-            drawGroup(selector-6);
-          }
+          drawOutput(selector-1);
+          drawOutput(selector);
           
         }
         
@@ -364,13 +415,15 @@ void loop() {
       //In menue 1
       if(menue==1){
         //On Outs
-        if(selector<6){
-          selected=selector;
-          selector=0;
-          drawMenueTwo();
-          menue=2;
-        }//On Groups
-        else{
+        selected=selector;
+        selector=0;
+        drawMenueTwo();
+        menue=2;
+      }else if(menue==2){
+        if(selector==4){
+          servoInverted[selected]=!servoInverted[selected];
+          drawContent(4);
+        }else{
           
         }
       }
@@ -514,35 +567,67 @@ void drawOutput(int num){
       display.drawLine(xCord,yCord,xCord+10,yCord,WHITE);
       display.drawLine(xCord+4,yCord+1,xCord+4,yCord+10,WHITE);
       display.drawLine(xCord+5,yCord+1,xCord+5,yCord+10,WHITE);
+
+      display.setTextSize(1);
+      display.setCursor(xCord+14,yCord+1);
+      display.println(servoMax[selected]);
     break;
     //min
     case 1:
+    //Icon
       display.drawLine(xCord,yCord+10,xCord+10,yCord+10,WHITE);
       display.drawLine(xCord+4,yCord,xCord+4,yCord+9,WHITE);
       display.drawLine(xCord+5,yCord,xCord+5,yCord+9,WHITE);
+      
+      display.setTextSize(1);
+      display.setCursor(xCord+14,yCord+1);
+      display.println(servoMin[selected]);
     break;
     //offset
     case 2:
+       //Icon
       display.drawLine(xCord,yCord,xCord,yCord+10,WHITE);
       display.drawLine(xCord+1,yCord+4,xCord+10,yCord+4,WHITE);
       display.drawLine(xCord+1,yCord+5,xCord+10,yCord+5,WHITE);
+
+      display.setTextSize(1);
+      display.setCursor(xCord+14,yCord+1);
+      display.println(servoOffset[selected]);
     break;
     //midpoint
     case 3:
+      //Icon
       display.drawLine(xCord+4,yCord,xCord+4,yCord+10,WHITE);
       display.drawLine(xCord,yCord+4,xCord+10,yCord+4,WHITE);
       display.drawLine(xCord,yCord+5,xCord+10,yCord+5,WHITE);
+
+      display.setTextSize(1);
+      display.setCursor(xCord+14,yCord+1);
+      display.println(servoMidpoint[selected]);
     break;
     //inverted
     case 4:
+      //Icon
       display.drawRect(xCord,yCord,10,10,WHITE);
       display.drawRect(xCord+4,yCord+4,2,2,WHITE);
+      
+      display.setTextSize(1);
+      display.setCursor(xCord+14,yCord+1);
+      if(servoInverted[selected]){
+        display.println("True");
+      }else{
+        display.println("False");
+      }
+      
     break;
     //Group
     case 5:
-      
+      display.setTextSize(1);
+      display.setCursor(xCord+2,yCord+1);
+      display.print("Group ");display.print(bind[selected]+1);
     break;
    }
+   display.display();
  }
 
  void drawMenueTwo(){
@@ -558,4 +643,15 @@ void drawOutput(int num){
       drawCheckBox(i,false);
       drawContent(i);
     }
+ }
+
+
+ void updateServoGroup(int num){
+    for(int i=0;i<6;i++){
+      if(bind[i]==num+1){
+        servos[i].write(counts[num]);
+        Serial.print("Updated Servo ");Serial.println(i+1);
+      }
+    }
+    Serial.print("Updated Servo Group");Serial.println(num+1);
  }
